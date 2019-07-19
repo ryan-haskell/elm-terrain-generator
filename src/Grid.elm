@@ -117,7 +117,7 @@ plant_ visited locations neighborsOf options valueWith (Grid data) =
     else
         plant_
             (List.foldl insertTrue visited unvisitedNeighbors)
-            (Debug.log "\nUnvisited neighbors:" unvisitedNeighbors)
+            unvisitedNeighbors
             neighborsOf
             { options | depth = depth }
             valueWith
