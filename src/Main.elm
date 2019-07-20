@@ -15,6 +15,7 @@ type alias Flags =
 
 type alias Model =
     { seed : Int
+    , size : Int
     , ocean : Settings
     , forest : Settings
     }
@@ -34,6 +35,7 @@ type Biome
 
 type Msg
     = UpdateSeed String
+    | UpdateSize String
     | Update Biome Field String
 
 
@@ -59,7 +61,7 @@ main =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( Model 123456789 (Settings 3 10 50) (Settings 3 10 50)
+    ( Model 123456771 25 (Settings 6 40 66) (Settings 37 6 70)
     , Cmd.none
     )
 
@@ -74,6 +76,11 @@ update msg model =
         UpdateSeed value ->
             String.toInt value
                 |> Maybe.map (\seed -> ( { model | seed = seed }, Cmd.none ))
+                |> Maybe.withDefault ( model, Cmd.none )
+
+        UpdateSize value ->
+            String.toInt value
+                |> Maybe.map (\size -> ( { model | size = size }, Cmd.none ))
                 |> Maybe.withDefault ( model, Cmd.none )
 
         Update biome field value ->
@@ -120,26 +127,29 @@ subscriptions _ =
 -- VIEW
 
 
+percentify : Int -> Float
+percentify chance =
+    toFloat (Basics.max 0 (Basics.min 100 chance)) / 100
+
+
 view : Model -> Html Msg
 view model =
     let
-        size =
-            48
-
         map =
             Game.Map.init
-                { size = size
+                { size = Basics.min 50 (Basics.max 10 model.size)
                 , seed = model.seed
+                , tile = Grass
                 , tiles =
-                    [ { tile = Tree
+                    [ { tile = always Tree
                       , count = model.forest.count
                       , depth = model.forest.depth
-                      , chance = toFloat (Basics.max 0 (Basics.min 100 model.forest.chance)) / 100
+                      , chance = percentify model.forest.chance
                       }
-                    , { tile = Water
+                    , { tile = always Water
                       , count = model.ocean.count
                       , depth = model.ocean.depth
-                      , chance = toFloat (Basics.max 0 (Basics.min 100 model.ocean.chance)) / 100
+                      , chance = percentify model.ocean.chance
                       }
                     ]
                 }
@@ -157,15 +167,26 @@ view model =
                         []
                     ]
                 ]
-            , div [ Html.Attributes.style "display" "flex" ]
+            , div []
+                [ label []
+                    [ strong [] [ Html.text "Size" ]
+                    , input
+                        [ Events.onInput UpdateSize
+                        , Html.Attributes.type_ "number"
+                        , value (String.fromInt model.size)
+                        ]
+                        []
+                    ]
+                ]
+            , div []
                 [ viewSettings "Ocean" model.ocean Ocean
                 , viewSettings "Forest" model.forest Forest
                 ]
             ]
         , svg
-            [ Attr.width (16 * size |> String.fromInt)
-            , Attr.height (16 * size |> String.fromInt)
-            , [ 0, 0, size, size ]
+            [ Attr.width (12 * model.size |> String.fromInt)
+            , Attr.height (12 * model.size |> String.fromInt)
+            , [ 0, 0, model.size, model.size ]
                 |> List.map String.fromInt
                 |> String.join " "
                 |> Attr.viewBox
@@ -174,9 +195,9 @@ view model =
                 (\y ->
                     List.map
                         (\x -> viewTile ( x, y ) (Game.Map.get ( x, y ) map))
-                        (List.range 0 size)
+                        (List.range 0 model.size)
                 )
-                (List.range 0 size)
+                (List.range 0 model.size)
                 |> List.concat
             )
         ]
@@ -225,45 +246,38 @@ viewSettings title settings biome =
 viewTile : ( Int, Int ) -> Tile -> Svg msg
 viewTile ( x, y ) tile =
     let
-        ( color, children ) =
+        color =
             case tile of
                 Grass ->
-                    ( "#396", [] )
+                    "#396"
 
-                Tree depth ->
-                    ( "#274"
-                    , [ Svg.node "text"
-                            [ Attr.x "0.35"
-                            , Attr.y "0.65"
-                            , Attr.fontSize "0.5"
-                            ]
-                            [ Svg.text (String.fromInt depth) ]
-                      ]
-                    )
+                Tree ->
+                    "#274"
 
-                Water depth ->
-                    ( "#49f"
-                    , [ Svg.node "text"
-                            [ Attr.x "0.35"
-                            , Attr.y "0.65"
-                            , Attr.fontSize "0.5"
-                            ]
-                            [ Svg.text (String.fromInt depth) ]
-                      ]
-                    )
+                Water ->
+                    "#49f"
     in
     Svg.svg
         [ Attr.x (String.fromInt x)
-        , Attr.y (String.fromInt y)
+        , Attr.y
+            (String.fromFloat
+                (if modBy 2 x == 0 then
+                    toFloat y
+
+                 else
+                    toFloat y + 0.5
+                )
+            )
         , fill "white"
         ]
-        (rect
-            [ Attr.x "0"
-            , Attr.y "0"
-            , Attr.width "1"
-            , Attr.height "1"
-            , fill color
-            ]
-            []
-            :: children
-        )
+        [ hexagon color
+        ]
+
+
+hexagon : String -> Svg msg
+hexagon color =
+    polygon
+        [ points "0,0.5 0.35,0 1,0 1.35,0.5 1,1 0.35,1"
+        , fill color
+        ]
+        []

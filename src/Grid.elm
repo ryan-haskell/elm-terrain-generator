@@ -43,9 +43,9 @@ init seedNumber default generator =
 
 -- PLANTING
 -- 1. Starts with `value depth`
--- 2. Uniformly spreads to neighbors with `chance`
--- 3. If success, plants `value depth`, recurses
--- 4. If failure, plants `value (depth - 1)` and recurses if `depth - 1 > 1`.
+-- 2. Spreads to neighbors with `chance`
+-- 3. If success, plants `value depth`, recurses on neighbors
+-- 4. If failure, plants `value (depth - 1)` and recurses if `depth > 0`.
 
 
 type alias PlantingOptions =

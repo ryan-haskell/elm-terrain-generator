@@ -15,13 +15,14 @@ type Map
 
 type Tile
     = Grass
-    | Water Int
-    | Tree Int
+    | Water
+    | Tree
 
 
 type alias Options =
     { seed : Int
     , size : Int
+    , tile : Tile
     , tiles : List PlantOptions
     }
 
@@ -35,7 +36,7 @@ type alias PlantOptions =
 
 
 init : Options -> Map
-init { seed, size, tiles } =
+init { seed, size, tile, tiles } =
     let
         plant : PlantOptions -> Grid ( Int, Int ) Tile -> Grid ( Int, Int ) Tile
         plant options grid =
@@ -57,7 +58,7 @@ init { seed, size, tiles } =
             plant
             (Grid.init
                 seed
-                Grass
+                tile
                 (coordinateGenerator size)
             )
             tiles
@@ -73,13 +74,11 @@ coordinateGenerator size =
 
 neighbors : Int -> ( Int, Int ) -> List ( Int, Int )
 neighbors size ( x, y ) =
-    [ ( x - 1, y )
-    , ( x + 1, y )
-    , ( x, y - 1 )
+    [ ( x, y - 1 )
     , ( x, y + 1 )
-    , ( x - 1, y - 1 )
+    , ( x - 1, y )
     , ( x - 1, y + 1 )
-    , ( x + 1, y - 1 )
+    , ( x + 1, y )
     , ( x + 1, y + 1 )
     ]
         |> List.map (Tuple.mapBoth (modBy size) (modBy size))
