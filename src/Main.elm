@@ -15,18 +15,31 @@ type alias Flags =
 
 type alias Model =
     { seed : Int
-    , depth : Int
-    , chance : Float
+    , ocean : Settings
+    , forest : Settings
     }
 
 
+type alias Settings =
+    { count : Int
+    , depth : Int
+    , chance : Int
+    }
+
+
+type Biome
+    = Ocean
+    | Forest
+
+
 type Msg
-    = Update Field String
+    = UpdateSeed String
+    | Update Biome Field String
 
 
 type Field
     = Chance
-    | Seed
+    | Count
     | Depth
 
 
@@ -46,7 +59,9 @@ main =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( Model 123456789 10 0.5, Cmd.none )
+    ( Model 123456789 (Settings 3 10 50) (Settings 3 10 50)
+    , Cmd.none
+    )
 
 
 
@@ -56,20 +71,40 @@ init _ =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Update Seed str ->
-            String.toInt str
+        UpdateSeed value ->
+            String.toInt value
                 |> Maybe.map (\seed -> ( { model | seed = seed }, Cmd.none ))
                 |> Maybe.withDefault ( model, Cmd.none )
 
-        Update Depth str ->
-            String.toInt str
-                |> Maybe.map (\depth -> ( { model | depth = depth }, Cmd.none ))
+        Update biome field value ->
+            String.toInt value
+                |> Maybe.map
+                    (\int ->
+                        case biome of
+                            Forest ->
+                                { model | forest = updateBiomeSettings model.forest field int }
+
+                            Ocean ->
+                                { model | ocean = updateBiomeSettings model.ocean field int }
+                    )
+                |> Maybe.map (\m -> ( m, Cmd.none ))
                 |> Maybe.withDefault ( model, Cmd.none )
 
-        Update Chance str ->
-            String.toFloat str
-                |> Maybe.map (\chance -> ( { model | chance = chance }, Cmd.none ))
-                |> Maybe.withDefault ( model, Cmd.none )
+
+updateBiomeSettings settings field int =
+    let
+        updateIntField fn =
+            fn settings
+    in
+    case field of
+        Count ->
+            updateIntField (\s -> { s | count = int })
+
+        Depth ->
+            updateIntField (\s -> { s | depth = int })
+
+        Chance ->
+            updateIntField (\s -> { s | chance = int })
 
 
 
@@ -85,56 +120,51 @@ subscriptions _ =
 -- VIEW
 
 
+view : Model -> Html Msg
 view model =
     let
         size =
-            25
+            48
 
         map =
             Game.Map.init
                 { size = size
                 , seed = model.seed
-                , depth = model.depth
-                , chance = Basics.max 0.0 (Basics.min 1.0 model.chance)
+                , tiles =
+                    [ { tile = Tree
+                      , count = model.forest.count
+                      , depth = model.forest.depth
+                      , chance = toFloat (Basics.max 0 (Basics.min 100 model.forest.chance)) / 100
+                      }
+                    , { tile = Water
+                      , count = model.ocean.count
+                      , depth = model.ocean.depth
+                      , chance = toFloat (Basics.max 0 (Basics.min 100 model.ocean.chance)) / 100
+                      }
+                    ]
                 }
     in
-    div []
+    div [ Html.Attributes.style "display" "flex" ]
         [ div []
-            [ label []
-                [ strong [] [ Html.text "Seed" ]
-                , input
-                    [ Events.onInput (Update Seed)
-                    , Html.Attributes.type_ "number"
-                    , value (String.fromInt model.seed)
+            [ div []
+                [ label []
+                    [ strong [] [ Html.text "Seed" ]
+                    , input
+                        [ Events.onInput UpdateSeed
+                        , Html.Attributes.type_ "number"
+                        , value (String.fromInt model.seed)
+                        ]
+                        []
                     ]
-                    []
                 ]
-            ]
-        , div []
-            [ label []
-                [ strong [] [ Html.text "Depth" ]
-                , input
-                    [ Events.onInput (Update Depth)
-                    , Html.Attributes.type_ "number"
-                    , value (String.fromInt model.depth)
-                    ]
-                    []
-                ]
-            ]
-        , div []
-            [ label []
-                [ strong [] [ Html.text "Chance" ]
-                , input
-                    [ Events.onInput (Update Chance)
-                    , Html.Attributes.type_ "number"
-                    , value (String.fromFloat model.chance)
-                    ]
-                    []
+            , div [ Html.Attributes.style "display" "flex" ]
+                [ viewSettings "Ocean" model.ocean Ocean
+                , viewSettings "Forest" model.forest Forest
                 ]
             ]
         , svg
-            [ Attr.width (24 * size |> String.fromInt)
-            , Attr.height (24 * size |> String.fromInt)
+            [ Attr.width (16 * size |> String.fromInt)
+            , Attr.height (16 * size |> String.fromInt)
             , [ 0, 0, size, size ]
                 |> List.map String.fromInt
                 |> String.join " "
@@ -149,6 +179,46 @@ view model =
                 (List.range 0 size)
                 |> List.concat
             )
+        ]
+
+
+viewSettings : String -> Settings -> Biome -> Html Msg
+viewSettings title settings biome =
+    div [ Html.Attributes.style "margin-right" "1rem" ]
+        [ h4 [] [ Html.text title ]
+        , div []
+            [ label []
+                [ strong [] [ Html.text "Count" ]
+                , input
+                    [ Events.onInput (Update biome Count)
+                    , Html.Attributes.type_ "number"
+                    , value (String.fromInt settings.count)
+                    ]
+                    []
+                ]
+            ]
+        , div []
+            [ label []
+                [ strong [] [ Html.text "Depth" ]
+                , input
+                    [ Events.onInput (Update biome Depth)
+                    , Html.Attributes.type_ "number"
+                    , value (String.fromInt settings.depth)
+                    ]
+                    []
+                ]
+            ]
+        , div []
+            [ label []
+                [ strong [] [ Html.text "Chance" ]
+                , input
+                    [ Events.onInput (Update biome Chance)
+                    , Html.Attributes.type_ "number"
+                    , value (String.fromInt settings.chance)
+                    ]
+                    []
+                ]
+            ]
         ]
 
 

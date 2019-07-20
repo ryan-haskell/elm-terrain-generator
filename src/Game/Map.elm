@@ -19,26 +19,48 @@ type Tile
     | Tree Int
 
 
-init : { depth : Int, size : Int, seed : Int, chance : Float } -> Map
-init { depth, size, seed, chance } =
+type alias Options =
+    { seed : Int
+    , size : Int
+    , tiles : List PlantOptions
+    }
+
+
+type alias PlantOptions =
+    { count : Int
+    , tile : Int -> Tile
+    , depth : Int
+    , chance : Float
+    }
+
+
+init : Options -> Map
+init { seed, size, tiles } =
     let
-        plant =
-            Grid.plant
-                (neighbors size)
-                { depth = depth, chance = chance }
+        plant : PlantOptions -> Grid ( Int, Int ) Tile -> Grid ( Int, Int ) Tile
+        plant options grid =
+            if options.count > 0 then
+                plant
+                    { options | count = options.count - 1 }
+                    (Grid.plant
+                        (neighbors size)
+                        { depth = options.depth, chance = options.chance }
+                        options.tile
+                        grid
+                    )
+
+            else
+                grid
     in
     Map size
-        (Grid.init
-            seed
-            Grass
-            (coordinateGenerator size)
-            |> plant Water
-            |> plant Water
-            |> plant Water
-            |> plant Water
-            |> plant Tree
-            |> plant Tree
-            |> plant Tree
+        (List.foldl
+            plant
+            (Grid.init
+                seed
+                Grass
+                (coordinateGenerator size)
+            )
+            tiles
         )
 
 

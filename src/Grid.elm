@@ -136,7 +136,10 @@ plantBois options valueWith location ( depth, dict, seed ) =
             R.step (R.float 0 1) seed
     in
     if depth < 1 then
-        ( 0, dict, newSeed )
+        ( 0
+        , dict
+        , newSeed
+        )
 
     else if randomPercent < options.chance then
         ( depth
@@ -145,7 +148,10 @@ plantBois options valueWith location ( depth, dict, seed ) =
         )
 
     else
-        ( depth - 1, dict, newSeed )
+        ( depth - 1
+        , Dict.insert location (valueWith depth) dict
+        , newSeed
+        )
 
 
 
