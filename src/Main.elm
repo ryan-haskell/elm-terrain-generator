@@ -1,12 +1,15 @@
 module Main exposing (main)
 
 import Browser
+import Configuration exposing (Configuration)
 import Game.Map exposing (Tile(..))
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events as Events
+import Json.Decode as D exposing (Decoder)
 import Svg exposing (..)
 import Svg.Attributes as Attr exposing (..)
+import Svg.Events
 
 
 type alias Flags =
@@ -14,35 +17,15 @@ type alias Flags =
 
 
 type alias Model =
-    { seed : Int
-    , size : Int
-    , ocean : Settings
-    , forest : Settings
+    { json : String
+    , offsetX : Int
+    , offsetY : Int
     }
-
-
-type alias Settings =
-    { count : Int
-    , depth : Int
-    , chance : Int
-    }
-
-
-type Biome
-    = Ocean
-    | Forest
 
 
 type Msg
-    = UpdateSeed String
-    | UpdateSize String
-    | Update Biome Field String
-
-
-type Field
-    = Chance
-    | Count
-    | Depth
+    = UpdateJson String
+    | OnKeyDown Direction
 
 
 main : Program Flags Model Msg
@@ -61,7 +44,14 @@ main =
 
 init : Flags -> ( Model, Cmd Msg )
 init _ =
-    ( Model 123456771 25 (Settings 6 40 66) (Settings 37 6 70)
+    ( Model """{
+    "seed": 0,
+    "size": 24,
+    "water": { "count": 75, "depth": 4, "chance": 75 },
+    "trees": { "count": 75, "depth": 12, "chance": 75 },
+    "towns": { "count": 6, "depth": 32, "chance": 65 },
+    "villages": { "count": 12, "depth": 4, "chance": 65 }
+}""" 0 0
     , Cmd.none
     )
 
@@ -72,46 +62,43 @@ init _ =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        UpdateSeed value ->
-            String.toInt value
-                |> Maybe.map (\seed -> ( { model | seed = seed }, Cmd.none ))
-                |> Maybe.withDefault ( model, Cmd.none )
+    ( case msg of
+        UpdateJson json ->
+            { model | json = json }
 
-        UpdateSize value ->
-            String.toInt value
-                |> Maybe.map (\size -> ( { model | size = size }, Cmd.none ))
-                |> Maybe.withDefault ( model, Cmd.none )
+        OnKeyDown dir ->
+            case dir of
+                Up ->
+                    { model | offsetY = model.offsetY - 1 }
 
-        Update biome field value ->
-            String.toInt value
-                |> Maybe.map
-                    (\int ->
-                        case biome of
-                            Forest ->
-                                { model | forest = updateBiomeSettings model.forest field int }
+                Down ->
+                    { model | offsetY = model.offsetY + 1 }
 
-                            Ocean ->
-                                { model | ocean = updateBiomeSettings model.ocean field int }
-                    )
-                |> Maybe.map (\m -> ( m, Cmd.none ))
-                |> Maybe.withDefault ( model, Cmd.none )
+                UpLeft ->
+                    { model
+                        | offsetX = model.offsetX - 1
+                        , offsetY = model.offsetY - 1
+                    }
 
+                UpRight ->
+                    { model
+                        | offsetX = model.offsetX + 1
+                        , offsetY = model.offsetY - 1
+                    }
 
-updateBiomeSettings settings field int =
-    let
-        updateIntField fn =
-            fn settings
-    in
-    case field of
-        Count ->
-            updateIntField (\s -> { s | count = int })
+                DownLeft ->
+                    { model
+                        | offsetX = model.offsetX - 1
+                        , offsetY = model.offsetY + 1
+                    }
 
-        Depth ->
-            updateIntField (\s -> { s | depth = int })
-
-        Chance ->
-            updateIntField (\s -> { s | chance = int })
+                DownRight ->
+                    { model
+                        | offsetX = model.offsetX + 1
+                        , offsetY = model.offsetY + 1
+                    }
+    , Cmd.none
+    )
 
 
 
@@ -134,117 +121,123 @@ percentify chance =
 
 view : Model -> Html Msg
 view model =
-    let
-        map =
-            Game.Map.init
-                { size = Basics.min 50 (Basics.max 10 model.size)
-                , seed = model.seed
-                , tile = Grass
-                , tiles =
-                    [ { tile = always Tree
-                      , count = model.forest.count
-                      , depth = model.forest.depth
-                      , chance = percentify model.forest.chance
-                      }
-                    , { tile = always Water
-                      , count = model.ocean.count
-                      , depth = model.ocean.depth
-                      , chance = percentify model.ocean.chance
-                      }
-                    ]
-                }
-    in
-    div [ Html.Attributes.style "display" "flex" ]
-        [ div []
-            [ div []
-                [ label []
-                    [ strong [] [ Html.text "Seed" ]
-                    , input
-                        [ Events.onInput UpdateSeed
-                        , Html.Attributes.type_ "number"
-                        , value (String.fromInt model.seed)
-                        ]
-                        []
-                    ]
+    div []
+        [ div
+            []
+            [ textarea
+                [ Events.onInput UpdateJson
+                , value model.json
+                , Html.Attributes.style "min-width" "25rem"
+                , Html.Attributes.style "min-height" "7rem"
+                , Html.Attributes.style "font-family" "monospace"
                 ]
-            , div []
-                [ label []
-                    [ strong [] [ Html.text "Size" ]
-                    , input
-                        [ Events.onInput UpdateSize
-                        , Html.Attributes.type_ "number"
-                        , value (String.fromInt model.size)
-                        ]
-                        []
-                    ]
-                ]
-            , div []
-                [ viewSettings "Ocean" model.ocean Ocean
-                , viewSettings "Forest" model.forest Forest
-                ]
+                []
             ]
-        , svg
-            [ Attr.width (12 * model.size |> String.fromInt)
-            , Attr.height (12 * model.size |> String.fromInt)
-            , [ 0, 0, model.size, model.size ]
-                |> List.map String.fromInt
-                |> String.join " "
-                |> Attr.viewBox
-            ]
-            (List.map
-                (\y ->
-                    List.map
-                        (\x -> viewTile ( x, y ) (Game.Map.get ( x, y ) map))
-                        (List.range 0 model.size)
-                )
-                (List.range 0 model.size)
-                |> List.concat
+        , p [] [ Html.text "Click on the map, and use QWEASD to move around" ]
+        , case Configuration.parse model.json of
+            Nothing ->
+                Html.text "Couldn't understand JSON..."
+
+            Just config ->
+                let
+                    map =
+                        Game.Map.init
+                            { size = config.size
+                            , seed = config.seed
+                            , tile = Grass
+                            , tiles =
+                                [ { tile = Tree
+                                  , count = round <| percentify config.trees.count * toFloat config.size
+                                  , depth = config.trees.depth
+                                  , chance = percentify config.trees.chance
+                                  }
+                                , { tile = Water
+                                  , count = round <| percentify config.water.count * toFloat config.size
+                                  , depth = config.water.depth
+                                  , chance = percentify config.water.chance
+                                  }
+                                , { tile = Town
+                                  , count = round <| percentify config.towns.count * toFloat config.size
+                                  , depth = config.towns.depth
+                                  , chance = percentify config.towns.chance
+                                  }
+                                , { tile = Village
+                                  , count = round <| percentify config.villages.count * toFloat config.size
+                                  , depth = config.villages.depth
+                                  , chance = percentify config.villages.chance
+                                  }
+                                ]
+                            }
+                in
+                button [ Events.on "keydown" (D.map OnKeyDown keyDecoder) ]
+                    [ svg
+                        [ Attr.width (12 * config.size |> String.fromInt)
+                        , Attr.height (12 * config.size |> String.fromInt)
+                        , [ 0, 0, config.size, config.size ]
+                            |> List.map String.fromInt
+                            |> String.join " "
+                            |> Attr.viewBox
+                        ]
+                        (List.map
+                            (\y ->
+                                List.map
+                                    (\x ->
+                                        viewTile
+                                            ( x, y )
+                                            ( modBy config.size (x - model.offsetX)
+                                            , modBy config.size (y - model.offsetY)
+                                            )
+                                            (Game.Map.get ( x, y ) map)
+                                    )
+                                    (List.range 0 (config.size - 1))
+                            )
+                            (List.range 0 (config.size - 1))
+                            |> List.concat
+                        )
+                    ]
+        ]
+
+
+type Direction
+    = Up
+    | Down
+    | UpLeft
+    | UpRight
+    | DownLeft
+    | DownRight
+
+
+keyDecoder : Decoder Direction
+keyDecoder =
+    D.field "key" D.string
+        |> D.andThen
+            (\str ->
+                case str of
+                    "w" ->
+                        D.succeed Up
+
+                    "s" ->
+                        D.succeed Down
+
+                    "q" ->
+                        D.succeed UpLeft
+
+                    "e" ->
+                        D.succeed UpRight
+
+                    "a" ->
+                        D.succeed DownLeft
+
+                    "d" ->
+                        D.succeed DownRight
+
+                    _ ->
+                        D.fail "Don't know dat."
             )
-        ]
 
 
-viewSettings : String -> Settings -> Biome -> Html Msg
-viewSettings title settings biome =
-    div [ Html.Attributes.style "margin-right" "1rem" ]
-        [ h4 [] [ Html.text title ]
-        , div []
-            [ label []
-                [ strong [] [ Html.text "Count" ]
-                , input
-                    [ Events.onInput (Update biome Count)
-                    , Html.Attributes.type_ "number"
-                    , value (String.fromInt settings.count)
-                    ]
-                    []
-                ]
-            ]
-        , div []
-            [ label []
-                [ strong [] [ Html.text "Depth" ]
-                , input
-                    [ Events.onInput (Update biome Depth)
-                    , Html.Attributes.type_ "number"
-                    , value (String.fromInt settings.depth)
-                    ]
-                    []
-                ]
-            ]
-        , div []
-            [ label []
-                [ strong [] [ Html.text "Chance" ]
-                , input
-                    [ Events.onInput (Update biome Chance)
-                    , Html.Attributes.type_ "number"
-                    , value (String.fromInt settings.chance)
-                    ]
-                    []
-                ]
-            ]
-        ]
-
-
-viewTile : ( Int, Int ) -> Tile -> Svg msg
-viewTile ( x, y ) tile =
+viewTile : ( Int, Int ) -> ( Int, Int ) -> Tile -> Svg Msg
+viewTile ( realX, realY ) ( x, y ) tile =
     let
         color =
             case tile of
@@ -254,6 +247,12 @@ viewTile ( x, y ) tile =
                 Tree ->
                     "#274"
 
+                Town ->
+                    "#765"
+
+                Village ->
+                    "#c97"
+
                 Water ->
                     "#49f"
     in
@@ -261,7 +260,7 @@ viewTile ( x, y ) tile =
         [ Attr.x (String.fromInt x)
         , Attr.y
             (String.fromFloat
-                (if modBy 2 x == 0 then
+                (if modBy 2 realX == 0 then
                     toFloat y
 
                  else

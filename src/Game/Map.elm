@@ -3,6 +3,7 @@ module Game.Map exposing
     , Tile(..)
     , get
     , init
+    , neighbors
     )
 
 import Grid exposing (Grid)
@@ -17,6 +18,8 @@ type Tile
     = Grass
     | Water
     | Tree
+    | Village
+    | Town
 
 
 type alias Options =
@@ -29,7 +32,7 @@ type alias Options =
 
 type alias PlantOptions =
     { count : Int
-    , tile : Int -> Tile
+    , tile : Tile
     , depth : Int
     , chance : Float
     }
@@ -37,25 +40,9 @@ type alias PlantOptions =
 
 init : Options -> Map
 init { seed, size, tile, tiles } =
-    let
-        plant : PlantOptions -> Grid ( Int, Int ) Tile -> Grid ( Int, Int ) Tile
-        plant options grid =
-            if options.count > 0 then
-                plant
-                    { options | count = options.count - 1 }
-                    (Grid.plant
-                        (neighbors size)
-                        { depth = options.depth, chance = options.chance }
-                        options.tile
-                        grid
-                    )
-
-            else
-                grid
-    in
     Map size
         (List.foldl
-            plant
+            (plant size)
             (Grid.init
                 seed
                 tile
@@ -63,6 +50,23 @@ init { seed, size, tile, tiles } =
             )
             tiles
         )
+
+
+plant : Int -> PlantOptions -> Grid ( Int, Int ) Tile -> Grid ( Int, Int ) Tile
+plant size options grid =
+    if options.count > 0 then
+        plant
+            size
+            { options | count = options.count - 1 }
+            (Grid.plant
+                (neighbors size)
+                { depth = options.depth, chance = options.chance }
+                (always options.tile)
+                grid
+            )
+
+    else
+        grid
 
 
 coordinateGenerator : Int -> R.Generator ( Int, Int )
@@ -74,12 +78,20 @@ coordinateGenerator size =
 
 neighbors : Int -> ( Int, Int ) -> List ( Int, Int )
 neighbors size ( x, y ) =
+    let
+        operator =
+            if modBy 2 x == 1 then
+                (+)
+
+            else
+                (-)
+    in
     [ ( x, y - 1 )
     , ( x, y + 1 )
     , ( x - 1, y )
-    , ( x - 1, y + 1 )
+    , ( x - 1, operator y 1 )
     , ( x + 1, y )
-    , ( x + 1, y + 1 )
+    , ( x + 1, operator y 1 )
     ]
         |> List.map (Tuple.mapBoth (modBy size) (modBy size))
 
